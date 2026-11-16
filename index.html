@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Посты для группы</title>
+<style>
+  /* Layout: single reading column, numbered posts as separate rows, copy action per row and for the whole list */
+  :root {
+    --bg: #faf7f8;
+    --surface: #ffffff;
+    --fg: #231b20;
+    --muted: #6f6168;
+    --line: #e9dfe3;
+    --accent: #a82a5a;
+    --accent-fg: #ffffff;
+    --accent-soft: #f6e4ec;
+    --font-body: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --font-head: "Manrope", "Inter", system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #17121a;
+      --surface: #201a24;
+      --fg: #f1e8ee;
+      --muted: #a898a1;
+      --line: #342b39;
+      --accent: #e0749f;
+      --accent-fg: #1b0f16;
+      --accent-soft: #3a2230;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #17121a;
+    --surface: #201a24;
+    --fg: #f1e8ee;
+    --muted: #a898a1;
+    --line: #342b39;
+    --accent: #e0749f;
+    --accent-fg: #1b0f16;
+    --accent-soft: #3a2230;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.55;
+    padding-block: 28px 56px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .wrap { max-width: 680px; margin: 0 auto; }
+  header { display: flex; flex-direction: column; gap: 14px; padding-bottom: 22px; border-bottom: 1px solid var(--line); }
+  h1 { font-family: var(--font-head); font-weight: 800; font-size: clamp(1.6rem, 5vw, 2.1rem); line-height: 1.15; margin: 0; text-wrap: balance; }
+  .sub { margin: 0; color: var(--muted); font-size: 0.95rem; max-width: 52ch; }
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  button {
+    font: inherit; font-weight: 600; font-size: 0.9rem; cursor: pointer;
+    border-radius: 8px; padding: 9px 14px; border: 1px solid var(--accent);
+    background: var(--accent); color: var(--accent-fg);
+  }
+  button.ghost { background: transparent; color: var(--accent); }
+  button:hover { filter: brightness(1.06); }
+  button:focus-visible { outline: 3px solid var(--accent-soft); outline-offset: 2px; box-shadow: 0 0 0 2px var(--accent); }
+  .note { color: var(--muted); font-size: 0.85rem; }
+  ol { list-style: none; margin: 0; padding: 0; }
+  li.post { display: grid; grid-template-columns: 2.4rem minmax(0, 1fr); gap: 4px 12px; padding: 20px 0; border-bottom: 1px solid var(--line); }
+  .num { font-family: var(--font-head); font-weight: 800; font-size: 1.05rem; color: var(--accent); font-variant-numeric: tabular-nums; padding-top: 1px; }
+  .body { min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+  .story { margin: 0; overflow-wrap: anywhere; }
+  .q { margin: 0; font-weight: 600; background: var(--accent-soft); padding: 10px 12px; border-radius: 8px; overflow-wrap: anywhere; }
+  .row { display: flex; align-items: center; gap: 10px; }
+  .summary { margin: 0; font-weight: 600; font-size: 0.95rem; font-variant-numeric: tabular-nums; }
+  .tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+  button.tab { background: transparent; color: var(--fg); border-color: var(--line); font-weight: 500; padding: 7px 12px; }
+  button.tab[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .check { display: inline-flex; align-items: center; gap: 8px; font-size: 0.9rem; font-weight: 500; cursor: pointer; padding: 4px 0; }
+  .check input { width: 20px; height: 20px; accent-color: var(--accent); cursor: pointer; margin: 0; }
+  button.quiet { background: transparent; color: var(--muted); border-color: var(--line); font-weight: 500; }
+  li.post.used .story, li.post.used .q { text-decoration: line-through; color: var(--muted); }
+  li.post.used .q { background: transparent; font-weight: 500; }
+  li.post.used .num { color: var(--muted); }
+  li.empty { padding: 28px 0; color: var(--muted); border-bottom: 1px solid var(--line); }
+  @media (max-width: 420px) { li.post { grid-template-columns: 1fr; } }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <h1>Посты для группы</h1>
+    <p class="sub">Отмечайте посты, которые уже опубликовали, и убирайте те, что не нравятся. Отметки сохраняются.</p>
+    <p class="summary" id="summary"></p>
+    <div class="tabs" id="tabs" role="group" aria-label="Фильтр постов"></div>
+    <div class="actions">
+      <button id="copy-all" type="button">Скопировать оставшиеся</button>
+      <span class="note" id="status" role="status" aria-live="polite"></span>
+    </div>
+  </header>
+  <ol id="list"></ol>
+</div>
+
+<script>
+(function () {
+  var posts = [
+    [`Она сказала: «Я не ревнивая, просто хочу знать, с кем ты общаешься». Через месяц вы уже отчитываетесь, где были и с кем пили кофе.`, `Как вы относитесь к такой «просто заинтересованности»? Где она заканчивается?`],
+    [`Татуировка с именем партнёрки: романтика или заявка на будущую боль? Говорят, примета плохая, но многие всё равно набивают.`, `Вы бы сделали тату с именем любимой? А у кого-то она уже есть и осталась после расставания?`],
+    [`У бывшей остались ваши вещи: любимая толстовка, книги, зарядка. Вы их заберёте, подарите ей или молча выбросите?`, `Расскажите, что случилось с вещами после вашего расставания.`],
+    [`Историю знаете: пара сходила на свидание, а утром оказалось, что одна уже вещи привезла. Тот самый стереотип про U-Haul, но если честно, он про торопливость.`, `Вы замечали за собой, что в отношениях торопите события? Чего вы боитесь, если не успеете закрепить?`],
+    [`«Мне не нужен романтический ужин, мне нужно, чтобы ты вынесла мусор без напоминаний». Бытовая забота для одних важнее цветов.`, `Что для вас доказательство любви: слова, подарки или то, что партнёрка просто делает свою часть дел?`],
+    [`Вы приходите на день рождения её подруги и выясняется, что половина гостей её бывшие. Все улыбаются, но атмосфера странная.`, `Как бы вы повели себя в такой компании? Остались бы или нашли повод уйти пораньше?`],
+    [`Она не любит публичных проявлений чувств: за руку на улице не берёт, в соцсетях вас не отмечает. Говорит «это личное».`, `Это нормальный выбор или удобная отговорка? Как вы с таким справлялись?`],
+    [`Что нельзя прощать в отношениях никогда? Не «я бы подумала», а твёрдое «нет».`, `Назовите одну вещь, после которой вы уходите без разговоров.`],
+    [`Вы три года вместе, а она всё ещё называет вас «моя девушка», а не «жена» или «партнёрка». Для кого-то это мелочь, для кого-то сигнал.`, `Как вы называете друг друга при посторонних? И важно ли вам это слово?`],
+    [`Одна девушка сказала на первом свидании: «Я ищу серьёзные отношения, у меня уже есть список вопросов». Достала телефон и начала зачитывать.`, `Как вы относитесь к «анкетному» подходу к знакомству? Это честно или слишком рано?`],
+    [`Ваша партнёрка дружит с бывшей, ходит с ней на кофе и пишет в мессенджере. «Она мне как сестра». Вам спокойно?`, `Где граница дружбы с бывшей, которая вас не напрягает? Или она не существует?`],
+    [`Вопрос на честность: вы хоть раз проверяли, лайкает ли ваша девушка чужие фото? Не будем судить, просто интересно, сколько нас.`, `Это любопытство или тревога? Что вы делали с тем, что увидели?`],
+    [`Когда вы ссоритесь, она уходит спать к подруге. Говорит, что ей нужно остыть. Вам же кажется, что вас бросили.`, `Как у вас устроено пространство в ссоре? Нужно ли «остыть» отдельно или лучше проговорить сразу?`],
+    [`Мягкая тема: есть человек, рядом с которым вы вдруг замечаете, что дышите глубже. Не страсть, не бабочки, а просто спокойно.`, `Помните ли вы это ощущение? Что или кто его вызывал?`],
+    [`Расскажите про вашу самую «лесбийскую» бытовую привычку: общий плейлист, один шампунь на двоих, синхронные месячные, обмен одеждой.`, `Что из этого у вас уже стало нормой, а что до сих пор вызывает улыбку?`],
+    [`Мнение, которое многих задевает: «Если вы вместе много лет и не поссорились ни разу, значит, кто-то из вас молчит».`, `Согласны ли вы? Или бывают пары, у которых правда нет конфликтов?`],
+    [`Подруга советует: «Бросай её, она тебе не подходит». Вы слышите это уже в пятый раз, но сами ничего решить не можете.`, `Слушаете ли вы мнение друзей об отношениях? Были ли случаи, когда они оказались правы?`],
+    [`Самое необычное место, где вы познакомились с партнёркой или будущей девушкой: не бар и не приложение, а что-то совсем неожиданное.`, `Расскажите вашу историю знакомства, нам интересно.`],
+    [`Вы любите ходить в походы, она любит сидеть дома с книгой. Вы за активный отдых, она за диван. Её «не хочу» разбивает ваши планы.`, `Как вы справляетесь с разными ритмами жизни? Уступаете, разделяетесь или тянете её за собой?`],
+    [`Один из самых неловких моментов: вы случайно назвали партнёршу именем бывшей. Тишина и неловкий взгляд.`, `Было ли у вас такое? Чем закончилось?`],
+    [`Сколько раз в неделю вы с девушкой должны видеться, чтобы это были «нормальные» отношения? Одни говорят «каждый день», другие «два раза достаточно».`, `Какой график подходит вам? И что вы думаете о парах, у которых другой?`],
+    [`Подарок, который вы получили и до сих пор не знаете, как реагировать: слишком дорогой, слишком личный или просто странный.`, `Какой самый неожиданный подарок вам дарила партнёрка или девушка из свиданий?`],
+    [`Мнение: пары, которые ходят в одинаковых вещах и называют друг друга «котик» и «зайка», вызывают у других людей лёгкое раздражение.`, `Вы за публичную нежность или считаете, что некоторые вещи надо оставлять в спальне?`],
+    [`Ловите ли вы себя на мысли, что партнёрка стала хуже выглядеть или меньше следить за собой после нескольких лет вместе? А вы сами?`, `Как вы относитесь к тому, что в долгих отношениях люди «расслабляются»? Это про доверие или про потерю интереса?`],
+    [`Она хочет путешествовать и копить на кругосветку, вы хотите квартиру и стабильность. Оба желания честные, оба важные, и компромисса пока нет.`, `Как вы согласовываете большие жизненные цели? Кто уступает?`],
+    [`Вы рассказали подруге о проблеме в отношениях, а через неделю все общие друзья уже в курсе и смотрят на вас с сочувствием.`, `Было ли у вас такое, что близкая подруга выдала вашу тайну? Простили ли вы?`],
+    [`Откровенный вопрос: сколько партнёрш было у вас до нынешней и как вы к этому числу относитесь? Хочется вычеркнуть некоторых или всё было не зря?`, `Если бы вы могли стереть из жизни одни отношения, стали бы?`],
+    [`Мягкая тема: утро, она ещё спит, вы смотрите на неё и вдруг понимаете, что именно этого вы и хотели.`, `Расскажите о моменте, когда вы поняли, что любите свою партнёршу по-настоящему.`],
+    [`Одна из самых частых ловушек: вы начали встречаться с человеком, который вас восхищает, но уже через месяц вы стали «её фанаткой», а не «её девушкой».`, `Вы когда-нибудь теряли себя из-за восхищения партнёркой? Как это заметили?`],
+    [`Одни считают: проблема не в том, что люди расстаются, а в том, что слишком долго остаются там, где уже не любят.`, `Что вы думаете? Сколько времени нужно давать отношениям, прежде чем признать, что всё закончилось?`],
+    [`Правила её квартиры: обувь снимать, продукты хранить в определённых местах, посуду мыть сразу. Вы переехали, а правила остались.`, `Как вы делили пространство при переезде? Чья территория важнее, когда живёте вместе?`],
+    [`Тест на зрелость: что вы делаете, когда партнёрка права, а вы нет? Признаёте сразу или находите ещё три аргумента?`, `Честно ответьте, умеете ли вы говорить «ты была права»?`],
+    [`Ваша девушка говорит, что любит вас, но никогда не говорит почему. Вы не уверены, что это хорошо или плохо.`, `Нужны ли вам объяснения в любви? Что бы вы хотели от неё услышать?`],
+    [`Вы только что узнали, что подруга начала встречаться с вашей бывшей. Она сказала: «Мы просто попробуем, ты же не против?»`, `Как вы реагируете, когда подруга встречается с человеком из вашего прошлого? Есть ли здесь допустимый ответ «нет»?`],
+    [`Секс не всегда бывает идеальным. Иногда он неловкий, смешной или просто никакой. И в этом тоже есть близость.`, `Был ли у вас случай, когда неудачный интим закончился смехом, а не обидой?`],
+    [`Она поздно приходит домой и не пишет. Вы ждёте, накручиваете и в итоге выясняется, что просто села телефон.`, `Как вы справляетесь с тревогой, когда партнёрка не на связи? Вы пишете, звоните или терпите?`],
+    [`Выбор дня: проводить Новый год с её семьёй, где вас терпят, или с друзьями, где вам хорошо. Она хочет первое, вы второе.`, `Как вы принимаете решения, когда интересы двух семей расходятся?`],
+    [`Одна из самых странных ситуаций: вы начали встречаться и вдруг поняли, что у вас с партнёркой одинаковые бывшие. Мир тесен, комьюнити ещё теснее.`, `Сталкивались ли вы с такой историей? Что вы почувствовали?`],
+    [`Правда ли, что в паре две женщины лучше понимают друг друга, или это самый большой миф комьюнити?`, `Приведите пример, когда вы поняли, что «понимать» и «понимать без слов» — разные вещи.`],
+    [`Ваша партнёрка хорошо зарабатывает, а вы только начинаете карьеру. Она платит за рестораны, поездки и подарки. Вы чувствуете благодарность и неловкость одновременно.`, `Как вы относитесь к неравенству доходов в паре? Меняет ли оно расстановку сил?`],
+    [`Люди, которые меняют аватарку на фото с партнёркой после первой недели отношений, обычно расстаются через месяц. Совпадение или правило?`, `Что вы думаете об «объявлении» отношений в соцсетях? Когда это уместно?`],
+    [`Мягкая тема: чай, плед и сериал, который вы смотрите вместе уже третий сезон. Никаких событий, просто вы вдвоём.`, `Что в вашей паре считается идеальным обычным вечером?`],
+    [`Вы выбираете квартиру: она хочет в центр, вы за спокойный район. И каждый аргумент на самом деле про то, как вы видите будущее.`, `Какое решение о жилье стало для вашей пары проверкой на совместимость?`],
+    [`Остались ли у вас друзья, с которыми вы больше не общаетесь после расставания? И жалеете ли вы о потере больше, чем о самих отношениях?`, `Что вы чувствуете, когда видите их в соцсетях?`],
+    [`Вопрос для тех, кто сейчас одна: что вас больше всего пугает в мысли о новых отношениях? Не абстрактно, а конкретно: что именно вы не хотите повторить?`, `Назовите одну вещь, и мы поймём друг друга.`],
+    [`Вы познакомились с девушкой, которая вам очень нравится, но у неё ребёнок от прошлых отношений. Вы не уверены, готовы ли стать частью чужой семьи.`, `Как вы относитесь к отношениям с человеком, у которого уже есть дети? И как бы вы вели себя с ребёнком?`],
+    [`Один из болезненных вопросов: вы замечаете, что партнёрка стала эмоционально закрытой и перестала делиться тем, что с ней происходит. Что сделать: давить, ждать или просто быть рядом?`, `Как вы вели себя в такой ситуации?`],
+    [`Самое смешное недопонимание в ваших отношениях: что-то не так услышали, не так поняли и потом долго смеялись.`, `Расскажите, чтобы все посмеялись вместе с вами.`],
+    [`Если бы вы могли дать один совет девушке, которая только начинает искать отношения в комьюнити, что бы вы ей сказали? Короткий, честный, без банальностей.`, `Поделитесь в комментариях, пригодится многим.`],
+    [`Последний пост для вовлечения: что вы поняли об отношениях только после тридцати? Что в двадцать казалось важным, а сейчас смешно?`, `Напишите, как изменились ваши взгляды. Интересно сравнить, кто в каком возрасте до этого дошёл.`]
+  ];
+
+  var list = document.getElementById('list');
+  var status = document.getElementById('status');
+  var timer = null;
+
+  function say(msg) {
+    status.textContent = msg;
+    clearTimeout(timer);
+    timer = setTimeout(function () { status.textContent = ''; }, 2500);
+  }
+
+  function fallbackCopy(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.top = '0';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    document.body.removeChild(ta);
+    return ok;
+  }
+
+  function copy(text, okMsg) {
+    var done = function (ok) { say(ok ? okMsg : 'Не удалось скопировать, выделите текст вручную'); };
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(fallbackCopy(text)); });
+        return;
+      }
+    } catch (e) {}
+    done(fallbackCopy(text));
+  }
+
+  var summary = document.getElementById('summary');
+  var tabsEl = document.getElementById('tabs');
+  var tabs = [['all', 'Все'], ['todo', 'Не использованы'], ['used', 'Использованы'], ['hidden', 'Убранные']];
+  var state = { used: {}, hidden: {} };
+  var view = 'all';
+  var doc = null;
+  var inflight = 0;
+  var queue = Promise.resolve();
+  var focusId = null;
+  var LS_KEY = 'posts-checklist';
+
+  function normalize(d) {
+    d = d || {};
+    return {
+      used: (d.used && typeof d.used === 'object') ? d.used : {},
+      hidden: (d.hidden && typeof d.hidden === 'object') ? d.hidden : {}
+    };
+  }
+
+  function persist() {
+    var snap = JSON.parse(JSON.stringify(state));
+    try { localStorage.setItem(LS_KEY, JSON.stringify(snap)); } catch (e) {}
+    if (!doc) return;
+    inflight++;
+    queue = queue
+      .then(function () { return doc.set(snap); })
+      .catch(function () { say('Не удалось сохранить отметки, попробуйте ещё раз'); })
+      .then(function () { inflight--; });
+  }
+
+  function counts() {
+    var used = 0, hidden = 0;
+    posts.forEach(function (p, i) {
+      var k = String(i + 1);
+      if (state.hidden[k]) hidden++;
+      else if (state.used[k]) used++;
+    });
+    return { used: used, hidden: hidden, todo: posts.length - used - hidden };
+  }
+
+  function visible(i) {
+    var k = String(i + 1);
+    var h = !!state.hidden[k], u = !!state.used[k];
+    if (view === 'hidden') return h;
+    if (h) return false;
+    if (view === 'todo') return !u;
+    if (view === 'used') return u;
+    return true;
+  }
+
+  function toggle(map, k, on) {
+    if (on) map[k] = true; else delete map[k];
+    persist();
+    render();
+  }
+
+  function renderTabs(c) {
+    var total = { all: c.todo + c.used, todo: c.todo, used: c.used, hidden: c.hidden };
+    tabsEl.textContent = '';
+    tabs.forEach(function (t) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'tab';
+      b.id = 'tab-' + t[0];
+      b.setAttribute('aria-pressed', view === t[0] ? 'true' : 'false');
+      b.textContent = t[1] + ' ' + total[t[0]];
+      b.addEventListener('click', function () { view = t[0]; focusId = b.id; render(); });
+      tabsEl.appendChild(b);
+    });
+  }
+
+  function render() {
+    var c = counts();
+    summary.textContent = 'Осталось ' + c.todo + ' · использовано ' + c.used + ' · убрано ' + c.hidden;
+    renderTabs(c);
+    list.textContent = '';
+    var shown = 0;
+    posts.forEach(function (p, i) {
+      if (!visible(i)) return;
+      shown++;
+      var k = String(i + 1);
+      var isUsed = !!state.used[k], isHidden = !!state.hidden[k];
+      var li = document.createElement('li');
+      li.className = 'post' + (isUsed && !isHidden ? ' used' : '');
+      var num = document.createElement('div');
+      num.className = 'num';
+      num.textContent = k + '.';
+      var body = document.createElement('div');
+      body.className = 'body';
+      var s = document.createElement('p');
+      s.className = 'story';
+      s.textContent = p[0];
+      var q = document.createElement('p');
+      q.className = 'q';
+      q.textContent = p[1];
+      var row = document.createElement('div');
+      row.className = 'row';
+      row.style.flexWrap = 'wrap';
+      if (!isHidden) {
+        var label = document.createElement('label');
+        label.className = 'check';
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.id = 'used-' + k;
+        cb.checked = isUsed;
+        cb.addEventListener('change', function () { focusId = cb.id; toggle(state.used, k, cb.checked); });
+        label.appendChild(cb);
+        label.appendChild(document.createTextNode('Использован'));
+        row.appendChild(label);
+      }
+      var copyBtn = document.createElement('button');
+      copyBtn.type = 'button';
+      copyBtn.className = 'ghost';
+      copyBtn.textContent = 'Скопировать';
+      copyBtn.addEventListener('click', function () { copy(p[0] + '\n' + p[1], 'Пост ' + k + ' скопирован'); });
+      row.appendChild(copyBtn);
+      var rm = document.createElement('button');
+      rm.type = 'button';
+      rm.className = 'quiet';
+      rm.id = 'rm-' + k;
+      rm.textContent = isHidden ? 'Вернуть' : 'Убрать';
+      rm.addEventListener('click', function () { focusId = null; toggle(state.hidden, k, !isHidden); });
+      row.appendChild(rm);
+      body.appendChild(s);
+      body.appendChild(q);
+      body.appendChild(row);
+      li.appendChild(num);
+      li.appendChild(body);
+      list.appendChild(li);
+    });
+    if (!shown) {
+      var e = document.createElement('li');
+      e.className = 'empty';
+      e.textContent = view === 'hidden' ? 'Убранных постов нет.' : (view === 'used' ? 'Пока нет использованных постов.' : (view === 'todo' ? 'Все посты использованы или убраны.' : 'Постов нет.'));
+      list.appendChild(e);
+    }
+    if (focusId) {
+      var el = document.getElementById(focusId);
+      if (el) el.focus();
+      focusId = null;
+    }
+  }
+
+  document.getElementById('copy-all').addEventListener('click', function () {
+    var rest = posts.filter(function (p, i) {
+      var k = String(i + 1);
+      return !state.hidden[k] && !state.used[k];
+    });
+    if (!rest.length) { say('Копировать нечего: все посты использованы или убраны'); return; }
+    var text = rest.map(function (p, n) { return (n + 1) + '. ' + p[0] + '\n' + p[1]; }).join('\n\n');
+    copy(text, 'Скопировано постов: ' + rest.length);
+  });
+
+  try {
+    var saved = localStorage.getItem(LS_KEY);
+    if (saved) state = normalize(JSON.parse(saved));
+  } catch (e) {}
+  render();
+
+  var loadTimer = null;
+  if (window.claude && window.claude.use) {
+    window.claude.use('db').then(function (db) {
+      if (!db) return;
+      doc = db.doc('checklist/state');
+      loadTimer = setTimeout(function () { say('Сохранённые отметки ещё не загрузились'); }, 10000);
+      doc.onSnapshot(function (snap) {
+        if (!snap.metadata.fromCache) clearTimeout(loadTimer);
+        if (inflight > 0) return;
+        if (snap.exists) { state = normalize(snap.data()); render(); }
+      }, function () {
+        clearTimeout(loadTimer);
+        say('Не удалось загрузить сохранённые отметки');
+      });
+    }, function () {});
+  }
+})();
+</script>
+
+</body>
+</html>
